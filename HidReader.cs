@@ -6,7 +6,6 @@ internal sealed class HidReader : NativeWindow, IDisposable
 {
     private readonly string devicePath;
     private readonly int length;
-    private readonly bool monitorWhileUnlocked;
     private readonly Action<string> scanned;
     private readonly StringBuilder buffer = new();
     private readonly Hook keyboardHook;
@@ -17,13 +16,11 @@ internal sealed class HidReader : NativeWindow, IDisposable
     private bool invalid;
     private bool locked;
 
-    public HidReader(string instance, int length, Action<string> scanned,
-        bool monitorWhileUnlocked = false)
+    public HidReader(string instance, int length, Action<string> scanned)
     {
         devicePath = @"\\?\" + instance.Replace('\\', '#') + "#";
         this.length = length;
         this.scanned = scanned;
-        this.monitorWhileUnlocked = monitorWhileUnlocked;
         keyboardHook = FilterKeyboard;
         mouseHook = FilterMouse;
 
@@ -67,7 +64,7 @@ internal sealed class HidReader : NativeWindow, IDisposable
 
     protected override void WndProc(ref Message message)
     {
-        if (message.Msg == 0x00FF && (locked || monitorWhileUnlocked))
+        if (locked && message.Msg == 0x00FF)
             ReadKey(message.LParam);
         base.WndProc(ref message);
     }

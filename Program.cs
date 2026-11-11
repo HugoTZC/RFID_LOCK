@@ -15,7 +15,8 @@ internal static class Program
             return 0;
         }
 
-        if (args is not ["--agent"])
+        bool setupRequested = args is ["--setup"];
+        if (!setupRequested && args is not ["--agent"])
             return 1;
 
         using var instance = new Mutex(true, @"Local\RfidLock.Agent", out bool first);
@@ -28,11 +29,11 @@ internal static class Program
                 "RfidLock", "config.json");
             ApplicationConfiguration.Initialize();
             Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
-            var configuration = File.Exists(configPath)
+            var configuration = !setupRequested && File.Exists(configPath)
                 ? JsonSerializer.Deserialize<Configuration>(File.ReadAllText(configPath))
                 : null;
             // Installation and legacy configuration files never arm the session lock.
-            if (configuration is not { ProtectionEnabled: true, ConfigurationVerifiedAt: not null })
+            if (setupRequested || configuration is not { ProtectionEnabled: true, ConfigurationVerifiedAt: not null })
             {
                 using var setup = new InitialSetup(configPath);
                 if (setup.ShowDialog() != DialogResult.OK)
@@ -144,7 +145,7 @@ internal sealed class LockAgent : ApplicationContext
         {
             if (!string.IsNullOrWhiteSpace(configuration.HidInstance))
                 hid = new HidReader(configuration.HidInstance, configuration.BadgeLength,
-                    HandleHidBadge, monitorWhileUnlocked: true);
+                    HandleHidBadge);
             CheckReader();
             timer.Tick += Tick;
             timer.Start();

@@ -33,6 +33,12 @@ try {
     $installedService = $true
     Start-Service -Name $name
 
+    # Disarm any profile left behind by an older installation before launching setup.
+    $profileConfig = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'RfidLock\config.json'
+    if (Test-Path -LiteralPath $profileConfig) {
+        Move-Item -LiteralPath $profileConfig -Destination ($profileConfig + '.' + [guid]::NewGuid() + '.bak')
+    }
+
     $action = New-ScheduledTaskAction -Execute $exe -Argument '--agent'
     $trigger = New-ScheduledTaskTrigger -AtLogOn -User $identity
     $principal = New-ScheduledTaskPrincipal -UserId $identity -LogonType Interactive -RunLevel Highest
@@ -41,7 +47,7 @@ try {
     Register-ScheduledTask -TaskName $name -Action $action -Trigger $trigger `
         -Principal $principal -Settings $settings | Out-Null
     $installedTask = $true
-    Start-ScheduledTask -TaskName $name -TaskPath '\'
+    Start-Process -FilePath $exe -ArgumentList '--setup'
     Write-Host "Complete la configuración en la ventana de RFID Lock."
 } catch {
     if ($installedTask) { Unregister-ScheduledTask -TaskName $name -Confirm:$false }

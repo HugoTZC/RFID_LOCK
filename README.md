@@ -6,7 +6,7 @@ El servicio `RfidLock` inicia con Windows y solicita que el sistema y la pantall
 
 En Windows 10/11, instale el SDK de .NET 10 y abra PowerShell como administrador **con la misma cuenta que usará el equipo**. Para Windows ARM64, agregue `-Runtime win-arm64`. El ejecutable instalado incluye el runtime. La instalación requiere acceso a `https://api.nuget.org/v3/index.json` para restaurar los paquetes y el runtime.
 
-Ejecute el instalador sin argumentos. La tarea abre la ventana de configuración inmediatamente.
+Ejecute el instalador sin argumentos. El instalador abre la ventana de configuración inmediatamente y guarda una copia de cualquier configuración previa antes de registrar el inicio automático.
 
 ```powershell
 .\Install.ps1
@@ -14,7 +14,7 @@ Ejecute el instalador sin argumentos. La tarea abre la ventana de configuración
 
 En **Administrador de dispositivos → Teclados**, identifique la lectora desconectándola y conectándola. Copie **Propiedades → Detalles → Ruta de instancia del dispositivo**. Pegue la ruta en la ventana de RFID Lock, indique la longitud del código antes de Enter y escriba el nombre del usuario. Pulse **Probar gafete** y escanee. La prueba activa los mismos filtros que usa el bloqueo por hasta ocho segundos. El botón lleva el foco al campo de solo lectura «Código leído por la lectora». Una lectura aceptada muestra el código en ese campo, registra el gafete y termina la prueba. Repita por cada usuario y pulse **Guardar y activar**. La configuración se guarda en `%LOCALAPPDATA%\RfidLock\config.json` de la cuenta que ejecuta la tarea, y el agente se activa en la sesión actual. Cerrar la ventana antes de guardar deja el escritorio accesible.
 
-La configuración inicial admite lectoras USB HID que envían dígitos o letras A–Z seguidos de Enter. Tras desbloquear, a los diez segundos de inactividad aparece el nombre del usuario y la cuenta regresiva. Cualquier interacción reinicia el plazo de cinco minutos. Mientras el agente se ejecuta en la sesión, Raw Input recibe escaneos de la lectora HID aunque otra aplicación tenga el foco. Pase el mismo gafete que abrió la sesión para volver a bloquearla de inmediato. Una lectora en modo teclado también puede enviar sus caracteres a la aplicación enfocada mientras el escritorio está desbloqueado.
+La configuración inicial admite lectoras USB HID que envían dígitos o letras A–Z seguidos de Enter. Tras desbloquear, a los diez segundos de inactividad aparece el nombre del usuario y la cuenta regresiva. Cualquier interacción reinicia el plazo de cinco minutos. En modo COM, vuelva a escanear el gafete de la sesión para bloquearla. En modo HID, evite escanear con el escritorio desbloqueado y una consola enfocada, pues Windows puede enviar los caracteres y Enter a esa consola.
 
 ## Si la lectora se desconecta
 
