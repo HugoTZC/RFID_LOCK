@@ -15,4 +15,31 @@ if (Get-Service -Name $name -ErrorAction SilentlyContinue) {
 }
 
 $destination = Join-Path ([Environment]::GetFolderPath('ProgramFiles')) $name
-if (Test-Path -LiteralPath $destination) { Remove-Item -LiteralPath $destination -Recurse -Force }
+$exe = Join-Path $destination 'RfidLock.exe'
+
+# Setup runs independently of the scheduled task and can keep DLLs open.
+Get-Process -Name $name -ErrorAction SilentlyContinue |
+    Where-Object { $_.Path -eq $exe } |
+    ForEach-Object {
+        if (-not $_.HasExited) {
+            try {
+                Stop-Process -InputObject $_ -Force
+            } catch {
+                if (-not $_.HasExited) { throw }
+            }
+            if (-not $_.WaitForExit(5000)) {
+                throw 'RfidLock.exe sigue abierto. Cierre el proceso y ejecute Uninstall.ps1 de nuevo.'
+            }
+        }
+    }
+
+for ($attempt = 1; $attempt -le 5; $attempt++) {
+    if (-not (Test-Path -LiteralPath $destination)) { break }
+    try {
+        Remove-Item -LiteralPath $destination -Recurse -Force
+        break
+    } catch {
+        if ($attempt -eq 5 -and (Test-Path -LiteralPath $destination)) { throw }
+        Start-Sleep -Milliseconds 400
+    }
+}
