@@ -4,7 +4,10 @@ using System.Text;
 
 internal sealed class HidReader : NativeWindow, IDisposable
 {
-    private readonly string devicePath;
+    private readonly string? devicePath;
+    private nint frameDevice;
+
+    public string? DetectedInstance { get; private set; }
     private readonly int length;
     private readonly Action<string> scanned;
     private readonly StringBuilder buffer = new();
@@ -16,9 +19,10 @@ internal sealed class HidReader : NativeWindow, IDisposable
     private bool invalid;
     private bool locked;
 
-    public HidReader(string instance, int length, Action<string> scanned)
+    public HidReader(string? instance, int length, Action<string> scanned)
     {
-        devicePath = @"\\?\" + instance.Replace('\\', '#') + "#";
+        if (instance is not null)
+            devicePath = @"\\?\" + instance.Replace('\\', '#') + "#";
         this.length = length;
         this.scanned = scanned;
         keyboardHook = FilterKeyboard;
@@ -79,12 +83,13 @@ internal sealed class HidReader : NativeWindow, IDisposable
             || (key.Flags & 1) != 0)
             return;
 
-        if (!MatchesDevice(key.Header.Device))
+        if (devicePath is not null && !MatchesDevice(key.Header.Device))
             return;
 
         long now = Environment.TickCount64;
-        if (now - lastKey > 1500)
+        if (frameDevice != key.Header.Device || now - lastKey > 1500)
             Reset();
+        frameDevice = key.Header.Device;
         lastKey = now;
 
         int value = key.VirtualKey;
@@ -95,7 +100,19 @@ internal sealed class HidReader : NativeWindow, IDisposable
                 AgentLog.Write($"Trama HID rechazada. Longitud recibida: {buffer.Length}; esperada: {length}.");
             Reset();
             if (badge is not null)
+            {
+                if (devicePath is null)
+                {
+                    string? name = GetDeviceName(key.Header.Device);
+                    if (name is null || !name.StartsWith(@"\\?\HID#", StringComparison.OrdinalIgnoreCase)
+                        || name[4..].Split('#') is not [var bus, var hardware, var instance, _])
+                        return;
+
+                    DetectedInstance = string.Join('\\', bus, hardware, instance);
+                }
+
                 scanned(badge);
+            }
             return;
         }
         if (value is 16 or 160 or 161)
@@ -132,19 +149,21 @@ internal sealed class HidReader : NativeWindow, IDisposable
         return false;
     }
 
-    private unsafe bool MatchesDevice(nint device)
+    private bool MatchesDevice(nint device) =>
+        devicePath is not null && GetDeviceName(device)?.StartsWith(devicePath,
+            StringComparison.OrdinalIgnoreCase) == true;
+
+    private static unsafe string? GetDeviceName(nint device)
     {
         uint count = 0;
         if (GetRawInputDeviceInfo(device, 0x20000007, null, ref count) != 0
             || count is 0 or > 4096)
-            return false;
+            return null;
         char* path = stackalloc char[(int)count + 1];
         uint result = GetRawInputDeviceInfo(device, 0x20000007, path, ref count);
         if (result == uint.MaxValue || result > count)
-            return false;
-        var name = new ReadOnlySpan<char>(path, (int)result);
-        return name.StartsWith(devicePath, StringComparison.OrdinalIgnoreCase);
-
+            return null;
+        return new string(path, 0, (int)result);
     }
 
     public void Dispose()

@@ -6,7 +6,8 @@ using System.Text.Json;
 internal sealed class InitialSetup : Form
 {
     private readonly TextBox machine = new() { Text = Environment.MachineName };
-    private readonly TextBox instance = new();
+    private readonly TextBox instance = new() { ReadOnly = true };
+    private readonly Button resetReader = new() { Text = "Cambiar lectora", AutoSize = true, Enabled = false };
     private readonly NumericUpDown length = new() { Minimum = 1, Maximum = 128, Value = 10 };
     private readonly TextBox user = new();
     private readonly TextBox host = new();
@@ -46,7 +47,8 @@ internal sealed class InitialSetup : Form
         databaseFields.Controls.Add(next);
 
         AddField(readerFields, "Nombre de la máquina", machine);
-        AddField(readerFields, "Ruta de instancia HID (Administrador de dispositivos)", instance);
+        AddField(readerFields, "Lectora HID detectada", instance);
+        readerFields.Controls.Add(resetReader);
         AddField(readerFields, "Caracteres antes de Enter", length);
         AddField(readerFields, "Nombre del usuario del gafete", user);
         AddField(readerFields, "Código leído por la lectora", scan);
@@ -56,9 +58,15 @@ internal sealed class InitialSetup : Form
         Controls.Add(databaseFields);
         Controls.Add(readerFields);
 
-        instance.TextChanged += (_, _) => ClearTests();
+        resetReader.Click += (_, _) =>
+        {
+            instance.Clear();
+            resetReader.Enabled = false;
+            ClearTests();
+            status.Text = "Pulse Probar gafete y escanee con la nueva lectora.";
+        };
         length.ValueChanged += (_, _) => ClearTests();
-        timeout.Tick += (_, _) => FinishTest("No se recibió un código válido durante el bloqueo de prueba. Revise la longitud, el Enter y la ruta HID.");
+        timeout.Tick += (_, _) => FinishTest("No se recibió un código válido durante el bloqueo de prueba. Revise que la lectora envíe la longitud indicada y termine con Enter.");
         host.TextChanged += (_, _) => ResetDatabaseList();
         port.ValueChanged += (_, _) => ResetDatabaseList();
         databaseUser.TextChanged += (_, _) => ResetDatabaseList();
@@ -215,27 +223,29 @@ internal sealed class InitialSetup : Form
     private void StartTest()
     {
         string name = user.Text.Trim();
-        if (name.Length == 0 || instance.Text.Trim().Split('\\') is not ["HID", { Length: > 0 }, { Length: > 0 }])
+        if (name.Length == 0)
         {
-            status.Text = "Ingrese la ruta HID completa y el nombre del usuario.";
+            status.Text = "Ingrese el nombre del usuario.";
             return;
         }
 
+        string? selectedReader = instance.Text.Length == 0 ? null : instance.Text;
         try
         {
-            reader = new HidReader(instance.Text.Trim(), (int)length.Value, code =>
+            reader = new HidReader(selectedReader, (int)length.Value, code =>
             {
                 // Finish after Raw Input returns so its window can complete message cleanup.
                 BeginInvoke(() =>
                 {
                     if (reader is null)
                         return;
+                    instance.Text = selectedReader ?? reader.DetectedInstance!;
                     scan.Text = code;
                     badges[code] = name;
                     FinishTest($"Lectura válida para {name}. Gafetes verificados: {badges.Count}.");
                 });
             });
-            if (!reader.IsConnected())
+            if (selectedReader is not null && !reader.IsConnected())
             {
                 FinishTest("Windows no detecta esa instancia HID como teclado.");
                 return;
@@ -246,7 +256,7 @@ internal sealed class InitialSetup : Form
             test.Enabled = false;
             machine.Enabled = false;
             save.Enabled = false;
-            instance.Enabled = false;
+            resetReader.Enabled = false;
             length.Enabled = false;
             user.Enabled = false;
             status.Text = "Escanee el gafete ahora. Teclado y mouse se liberarán en un máximo de ocho segundos.";
@@ -267,7 +277,7 @@ internal sealed class InitialSetup : Form
         test.Enabled = true;
         machine.Enabled = true;
         save.Enabled = badges.Count != 0;
-        instance.Enabled = true;
+        resetReader.Enabled = instance.Text.Length != 0;
         length.Enabled = true;
         user.Enabled = true;
         status.Text = message;
