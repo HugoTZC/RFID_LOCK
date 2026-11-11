@@ -28,6 +28,12 @@ Para cambiar la configuración de una instalación existente, desinstale y vuelv
 
 Cierre sesión e iníciela de nuevo para probar. En modo HID, teclee manualmente un identificador autorizado seguido de Enter y confirme que el bloqueo sigue activo. Compruebe que un gafete desconocido conserva el bloqueo, que uno autorizado restaura teclado y mouse, y que tras cinco minutos sin tocar el equipo reaparece la cubierta. Reinicie para comprobar el inicio del servicio y la activación del bloqueo al volver a iniciar sesión.
 
+## Aviso de inactividad
+
+Agregue `-BadgeNames @{'0000123456' = 'Ana García'}` al comando de instalación para mostrar el nombre asociado a ese código autorizado. Los equipos ya instalados pueden agregar el objeto `"BadgeNames": {"0000123456": "Ana García"}` a su `config.json` y reiniciar la aplicación de sesión. Los gafetes sin nombre muestran «Usuario autorizado».
+
+Tras diez segundos sin actividad, un recuadro en la parte inferior derecha del monitor principal muestra el usuario y el tiempo restante desde 4:50. Cualquier interacción oculta el recuadro y reinicia los cinco minutos.
+
 ## Si la lectora se desconecta
 
 La sesión permanece accesible mientras la lectora configurada no esté disponible. Si se desconecta durante el bloqueo, la aplicación retira la cubierta y restaura teclado y mouse. Al detectar nuevamente esa misma lectora, la aplicación vuelve a bloquearse. Esto aplica al arrancar y durante el uso.

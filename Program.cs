@@ -52,7 +52,7 @@ internal static class Program
 }
 
 internal sealed record Configuration(string? Port, int BaudRate, string[] Badges,
-    string? HidInstance, int BadgeLength);
+    string? HidInstance, int BadgeLength, Dictionary<string, string>? BadgeNames);
 
 internal sealed class AwakeService : ServiceBase
 {
@@ -120,6 +120,8 @@ internal sealed class LockAgent : ApplicationContext
     private bool locked;
     private bool inputBlocked;
     private bool waitingForReader = true;
+    private IdleNotice? notice;
+    private string? currentUser;
 
     public LockAgent(Configuration configuration)
     {
@@ -131,7 +133,7 @@ internal sealed class LockAgent : ApplicationContext
                 hid = new HidReader(configuration.HidInstance, configuration.BadgeLength, badge =>
                 {
                     if (locked && badges.Contains(badge))
-                        Unlock();
+                        Unlock(badge);
                 });
             CheckReader();
             timer.Tick += Tick;
@@ -147,6 +149,8 @@ internal sealed class LockAgent : ApplicationContext
     private void Lock()
     {
         locked = true;
+        currentUser = null;
+        notice?.Hide();
         ResetFrame();
         // Drain data received while the desktop was unlocked.
         TryReader(discard: true);
@@ -254,9 +258,16 @@ internal sealed class LockAgent : ApplicationContext
             return;
 
         uint now = unchecked((uint)Environment.TickCount);
-        if (unchecked(now - unlockedAt) >= IdleMilliseconds
-            && unchecked(now - input.Time) >= IdleMilliseconds)
+        uint idle = Math.Min(unchecked(now - unlockedAt), unchecked(now - input.Time));
+        if (idle >= IdleMilliseconds)
             Lock();
+        else if (idle >= 10_000 && currentUser is not null)
+        {
+            notice ??= new IdleNotice();
+            notice.UpdateCountdown(currentUser, IdleMilliseconds - idle);
+        }
+        else
+            notice?.Hide();
     }
 
     private void TryReader(bool discard)
@@ -296,11 +307,12 @@ internal sealed class LockAgent : ApplicationContext
 
                 if (value is 13 or 10)
                 {
-                    bool valid = !discardFrame && badges.Contains(frame.ToString());
+                    string badge = frame.ToString();
+                    bool valid = !discardFrame && badges.Contains(badge);
                     ResetFrame();
                     if (valid)
                     {
-                        Unlock();
+                        Unlock(badge);
                         return;
                     }
                 }
@@ -335,8 +347,15 @@ internal sealed class LockAgent : ApplicationContext
         inputBlocked = false;
     }
 
-    private void Unlock()
+    private void Unlock(string? badge = null)
     {
+        currentUser = null;
+        if (badge is not null)
+        {
+            currentUser = configuration.BadgeNames?.TryGetValue(badge, out string? name) == true
+                && !string.IsNullOrWhiteSpace(name) ? name : "Usuario autorizado";
+        }
+        notice?.Hide();
         hid?.SetLocked(false);
         ReleaseInput();
         CloseCovers();
@@ -365,6 +384,7 @@ internal sealed class LockAgent : ApplicationContext
         if (disposing)
         {
             timer.Dispose();
+            notice?.Dispose();
             hid?.Dispose();
             ReleaseInput();
             CloseCovers();

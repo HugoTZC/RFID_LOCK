@@ -7,6 +7,7 @@ param(
     [Parameter(ParameterSetName = 'Hid')][ValidateRange(1, 128)][int]$BadgeLength = 10,
     [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string[]]$Badges,
     [Parameter(ParameterSetName = 'Serial')][ValidateRange(1, 4000000)][int]$BaudRate = 9600,
+    [hashtable]$BadgeNames = @{},
     [ValidateSet('win-x64', 'win-arm64')][string]$Runtime = 'win-x64'
 )
 
@@ -25,6 +26,13 @@ if ((Get-Service $name -ErrorAction SilentlyContinue) -or
 foreach ($badge in $Badges) {
     if ([string]::IsNullOrWhiteSpace($badge) -or $badge -notmatch '\A[ -~]{1,128}\z') {
         throw 'Cada gafete debe tener entre 1 y 128 caracteres ASCII imprimibles.'
+    }
+}
+
+foreach ($code in $BadgeNames.Keys) {
+    if ($code -isnot [string] -or $Badges -cnotcontains $code -or
+        $BadgeNames[$code] -isnot [string] -or [string]::IsNullOrWhiteSpace($BadgeNames[$code])) {
+        throw 'BadgeNames debe asociar cada código autorizado con un nombre de usuario.'
     }
 }
 
@@ -56,6 +64,7 @@ try {
         HidInstance = $HidInstance
         BadgeLength = $BadgeLength
         Badges = @($Badges)
+        BadgeNames = $BadgeNames
     } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $destination 'config.json') -Encoding UTF8
 
