@@ -134,6 +134,7 @@ internal sealed class LockAgent : ApplicationContext
     private bool waitingForReader = true;
     private IdleNotice? notice;
     private string? currentUser;
+    private string? currentBadge;
 
     public LockAgent(Configuration configuration)
     {
@@ -142,11 +143,8 @@ internal sealed class LockAgent : ApplicationContext
         try
         {
             if (!string.IsNullOrWhiteSpace(configuration.HidInstance))
-                hid = new HidReader(configuration.HidInstance, configuration.BadgeLength, badge =>
-                {
-                    if (locked && badges.Contains(badge))
-                        Unlock(badge);
-                });
+                hid = new HidReader(configuration.HidInstance, configuration.BadgeLength,
+                    HandleHidBadge, monitorWhileUnlocked: true);
             CheckReader();
             timer.Tick += Tick;
             timer.Start();
@@ -161,6 +159,7 @@ internal sealed class LockAgent : ApplicationContext
     private void Lock()
     {
         locked = true;
+        currentBadge = null;
         currentUser = null;
         notice?.Hide();
         ResetFrame();
@@ -264,7 +263,10 @@ internal sealed class LockAgent : ApplicationContext
             return;
         }
 
-        TryReader(discard: true);
+        TryReader(discard: false);
+        if (locked || waitingForReader)
+            return;
+
         var input = new Native.LastInput { Size = (uint)Marshal.SizeOf<Native.LastInput>() };
         if (!Native.GetLastInputInfo(ref input))
             return;
@@ -320,13 +322,10 @@ internal sealed class LockAgent : ApplicationContext
                 if (value is 13 or 10)
                 {
                     string badge = frame.ToString();
-                    bool valid = !discardFrame && badges.Contains(badge);
+                    bool valid = !discardFrame;
                     ResetFrame();
-                    if (valid)
-                    {
-                        Unlock(badge);
+                    if (valid && HandleBadge(badge))
                         return;
-                    }
                 }
                 else if (value is >= 32 and <= 126 && frame.Length < 128 && !discardFrame)
                     frame.Append((char)value);
@@ -359,8 +358,31 @@ internal sealed class LockAgent : ApplicationContext
         inputBlocked = false;
     }
 
+    private void HandleHidBadge(string badge) => HandleBadge(badge);
+
+    private bool HandleBadge(string badge)
+    {
+        if (waitingForReader)
+            return false;
+
+        if (locked && badges.Contains(badge))
+        {
+            Unlock(badge);
+            return true;
+        }
+
+        if (!locked && string.Equals(badge, currentBadge, StringComparison.Ordinal))
+        {
+            Lock();
+            return true;
+        }
+
+        return false;
+    }
+
     private void Unlock(string? badge = null)
     {
+        currentBadge = badge;
         currentUser = null;
         if (badge is not null)
         {
