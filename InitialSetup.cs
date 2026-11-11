@@ -1,3 +1,6 @@
+using Npgsql;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 
 internal sealed class InitialSetup : Form
@@ -6,6 +9,9 @@ internal sealed class InitialSetup : Form
     private readonly TextBox instance = new();
     private readonly NumericUpDown length = new() { Minimum = 1, Maximum = 128, Value = 10 };
     private readonly TextBox user = new();
+    private readonly TextBox database = new() { UseSystemPasswordChar = true };
+    private readonly Button verifyDatabase = new() { Text = "Probar conexión PostgreSQL", AutoSize = true };
+    private readonly Label databaseStatus = new() { AutoSize = true };
     private readonly TextBox scan = new() { ReadOnly = true };
     private readonly Label status = new() { AutoSize = true, MaximumSize = new Size(520, 0) };
     private readonly Button test = new() { Text = "Probar gafete", AutoSize = true };
@@ -31,12 +37,17 @@ internal sealed class InitialSetup : Form
         AddField("Código leído por la lectora", scan);
         fields.Controls.Add(test);
         fields.Controls.Add(status);
+        AddField("Cadena de conexión PostgreSQL (opcional)", database);
+        fields.Controls.Add(verifyDatabase);
+        fields.Controls.Add(databaseStatus);
         fields.Controls.Add(save);
         Controls.Add(fields);
 
         instance.TextChanged += (_, _) => ClearTests();
         length.ValueChanged += (_, _) => ClearTests();
         timeout.Tick += (_, _) => FinishTest("No se recibió un código válido durante el bloqueo de prueba. Revise la longitud, el Enter y la ruta HID.");
+        database.TextChanged += (_, _) => databaseStatus.Text = "";
+        verifyDatabase.Click += async (_, _) => await CheckDatabaseAsync();
         test.Click += (_, _) => StartTest();
         save.Click += (_, _) =>
         {
@@ -46,19 +57,23 @@ internal sealed class InitialSetup : Form
                 return;
             }
 
-            var configuration = new Configuration(null, 0, badges.Keys.ToArray(),
-                instance.Text.Trim(), (int)length.Value, badges, true,
-                DateTimeOffset.UtcNow, machine.Text.Trim());
             string temporaryPath = configPath + ".tmp";
             try
             {
+                string? protectedConnection = string.IsNullOrWhiteSpace(database.Text)
+                    ? null
+                    : Convert.ToBase64String(ProtectedData.Protect(
+                        Encoding.UTF8.GetBytes(database.Text), null, DataProtectionScope.CurrentUser));
+                var configuration = new Configuration(null, 0, badges.Keys.ToArray(),
+                    instance.Text.Trim(), (int)length.Value, badges, true,
+                    DateTimeOffset.UtcNow, machine.Text.Trim(), protectedConnection);
                 Directory.CreateDirectory(Path.GetDirectoryName(configPath)!);
                 File.WriteAllText(temporaryPath, JsonSerializer.Serialize(configuration));
                 File.Move(temporaryPath, configPath, overwrite: true);
                 SavedConfiguration = configuration;
                 DialogResult = DialogResult.OK;
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or CryptographicException)
             {
                 status.Text = "No se pudo guardar la configuración. " + ex.Message;
             }
@@ -69,6 +84,28 @@ internal sealed class InitialSetup : Form
             fields.Controls.Add(new Label { Text = label, AutoSize = true });
             field.Width = 520;
             fields.Controls.Add(field);
+        }
+    }
+
+    private async Task CheckDatabaseAsync()
+    {
+        verifyDatabase.Enabled = false;
+        database.Enabled = false;
+        try
+        {
+            var settings = new NpgsqlConnectionStringBuilder(database.Text) { Timeout = 5 };
+            await using var connection = new NpgsqlConnection(settings.ConnectionString);
+            await connection.OpenAsync();
+            databaseStatus.Text = "Conexión PostgreSQL verificada.";
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or NpgsqlException)
+        {
+            databaseStatus.Text = "No se pudo conectar. Revise servidor, credenciales y acceso de red.";
+        }
+        finally
+        {
+            database.Enabled = true;
+            verifyDatabase.Enabled = true;
         }
     }
 

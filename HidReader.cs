@@ -91,6 +91,8 @@ internal sealed class HidReader : NativeWindow, IDisposable
         if (value == 13)
         {
             string? badge = !invalid && buffer.Length == length ? buffer.ToString() : null;
+            if (badge is null && locked)
+                AgentLog.Write($"Trama HID rechazada. Longitud recibida: {buffer.Length}; esperada: {length}.");
             Reset();
             if (badge is not null)
                 scanned(badge);

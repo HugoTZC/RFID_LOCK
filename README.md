@@ -16,6 +16,12 @@ En **Administrador de dispositivos → Teclados**, identifique la lectora descon
 
 La configuración inicial admite lectoras USB HID que envían dígitos o letras A–Z seguidos de Enter. Al desbloquear, aparece un recuadro con el nombre del usuario, la cuenta regresiva y el botón **Bloquear**. El recuadro permanece visible mientras la sesión esté desbloqueada con un gafete. Cualquier interacción reinicia el plazo de cinco minutos. En modo COM, vuelva a escanear el gafete de la sesión para bloquearla. En modo HID, evite escanear con el escritorio desbloqueado y una consola enfocada, pues Windows puede enviar los caracteres y Enter a esa consola.
 
+## PostgreSQL y diagnóstico
+
+La configuración inicial incluye una cadena de conexión opcional y el botón **Probar conexión PostgreSQL**. Las credenciales se guardan cifradas para la cuenta de Windows que ejecuta la tarea. El bloqueo y la validación de gafetes usan el perfil local. La [migración](migrations/001_rfid_lock.sql) crea el esquema central y las [instrucciones](migrations/README.md) indican cómo aplicarla. La carga de CSV está pendiente.
+
+Si un gafete desbloquea y el equipo vuelve a bloquearse de inmediato, consulte `%LOCALAPPDATA%\RfidLock\diagnostico.log`. El registro indica el motivo del bloqueo y si llegó una lectura HID válida, rechazada o no autorizada. Omite los códigos de gafete.
+
 ## Si la lectora se desconecta
 
 La sesión permanece accesible mientras la lectora configurada no esté disponible. Si se desconecta durante el bloqueo, la aplicación retira la cubierta y restaura teclado y mouse. Al detectar nuevamente esa misma lectora, la aplicación vuelve a bloquearse. Esto aplica al arrancar y durante el uso.

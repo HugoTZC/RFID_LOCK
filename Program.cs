@@ -65,7 +65,8 @@ internal static class Program
 
 internal sealed record Configuration(string? Port, int BaudRate, string[] Badges,
     string? HidInstance, int BadgeLength, Dictionary<string, string>? BadgeNames,
-    bool ProtectionEnabled = false, DateTimeOffset? ConfigurationVerifiedAt = null, string? MachineName = null);
+    bool ProtectionEnabled = false, DateTimeOffset? ConfigurationVerifiedAt = null, string? MachineName = null,
+    string? ProtectedDatabaseConnection = null);
 
 internal sealed class AwakeService : ServiceBase
 {
@@ -133,6 +134,7 @@ internal sealed class LockAgent : ApplicationContext
     private bool locked;
     private bool inputBlocked;
     private bool waitingForReader = true;
+    private int missingReaderChecks;
     private IdleNotice? notice;
     private string? currentUser;
     private string? currentBadge;
@@ -157,8 +159,9 @@ internal sealed class LockAgent : ApplicationContext
         }
     }
 
-    private void Lock()
+    private void Lock(string reason)
     {
+        AgentLog.Write("Bloqueo: " + reason);
         locked = true;
         currentBadge = null;
         currentUser = null;
@@ -236,16 +239,20 @@ internal sealed class LockAgent : ApplicationContext
 
         if (!available)
         {
+            // Ignore brief Raw Input enumeration failures while a reader was available.
+            if (hid is not null && !waitingForReader && ++missingReaderChecks < 5)
+                return true;
             if (locked)
                 Unlock();
             waitingForReader = true;
             return false;
         }
 
+        missingReaderChecks = 0;
         if (waitingForReader)
         {
             waitingForReader = false;
-            Lock();
+            Lock("lectora disponible");
         }
         return true;
     }
@@ -275,7 +282,7 @@ internal sealed class LockAgent : ApplicationContext
         uint now = unchecked((uint)Environment.TickCount);
         uint idle = Math.Min(unchecked(now - unlockedAt), unchecked(now - input.Time));
         if (idle >= IdleMilliseconds)
-            Lock();
+            Lock("inactividad");
         else
             ShowIdleNotice(IdleMilliseconds - idle);
     }
@@ -288,7 +295,7 @@ internal sealed class LockAgent : ApplicationContext
         notice ??= new IdleNotice(() =>
         {
             if (!locked && CheckReader() && !locked)
-                Lock();
+                Lock("botón");
         });
         notice.UpdateCountdown(currentUser, remainingMilliseconds);
     }
@@ -367,7 +374,11 @@ internal sealed class LockAgent : ApplicationContext
         inputBlocked = false;
     }
 
-    private void HandleHidBadge(string badge) => HandleBadge(badge);
+    private void HandleHidBadge(string badge)
+    {
+        AgentLog.Write(badges.Contains(badge) ? "Gafete HID autorizado recibido." : "Gafete HID no autorizado.");
+        HandleBadge(badge);
+    }
 
     private bool HandleBadge(string badge)
     {
@@ -382,7 +393,7 @@ internal sealed class LockAgent : ApplicationContext
 
         if (!locked && string.Equals(badge, currentBadge, StringComparison.Ordinal))
         {
-            Lock();
+            Lock("gafete de la sesión");
             return true;
         }
 
@@ -391,6 +402,7 @@ internal sealed class LockAgent : ApplicationContext
 
     private void Unlock(string? badge = null)
     {
+        AgentLog.Write(badge is null ? "Desbloqueo por lectora no disponible." : "Desbloqueo por gafete.");
         currentBadge = badge;
         currentUser = null;
         if (badge is not null)
