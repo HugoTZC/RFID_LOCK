@@ -79,16 +79,7 @@ internal sealed class HidReader : NativeWindow, IDisposable
             || (key.Flags & 1) != 0)
             return;
 
-        uint count = 0;
-        if (GetRawInputDeviceInfo(key.Header.Device, 0x20000007, null, ref count) != 0
-            || count is 0 or > 4096)
-            return;
-        char* path = stackalloc char[(int)count + 1];
-        uint result = GetRawInputDeviceInfo(key.Header.Device, 0x20000007, path, ref count);
-        if (result == uint.MaxValue || result > count)
-            return;
-        var name = new ReadOnlySpan<char>(path, (int)result);
-        if (!name.StartsWith(devicePath, StringComparison.OrdinalIgnoreCase))
+        if (!MatchesDevice(key.Header.Device))
             return;
 
         long now = Environment.TickCount64;
@@ -116,6 +107,42 @@ internal sealed class HidReader : NativeWindow, IDisposable
             buffer.Append((char)('0' + value - 0x60));
         else
             invalid = true;
+    }
+
+    public unsafe bool IsConnected()
+    {
+        uint count = 0;
+        uint size = (uint)sizeof(DeviceListEntry);
+        if (GetRawInputDeviceList(null, ref count, size) != 0 || count == 0 || count > 4096)
+            return false;
+
+        var devices = new DeviceListEntry[(int)count];
+        fixed (DeviceListEntry* entries = devices)
+        {
+            uint read = GetRawInputDeviceList(entries, ref count, size);
+            if (read > devices.Length)
+                return false;
+
+            for (int i = 0; i < read; i++)
+                if (devices[i].Type == 1 && MatchesDevice(devices[i].Device))
+                    return true;
+        }
+        return false;
+    }
+
+    private unsafe bool MatchesDevice(nint device)
+    {
+        uint count = 0;
+        if (GetRawInputDeviceInfo(device, 0x20000007, null, ref count) != 0
+            || count is 0 or > 4096)
+            return false;
+        char* path = stackalloc char[(int)count + 1];
+        uint result = GetRawInputDeviceInfo(device, 0x20000007, path, ref count);
+        if (result == uint.MaxValue || result > count)
+            return false;
+        var name = new ReadOnlySpan<char>(path, (int)result);
+        return name.StartsWith(devicePath, StringComparison.OrdinalIgnoreCase);
+
     }
 
     public void Dispose()
@@ -152,6 +179,17 @@ internal sealed class HidReader : NativeWindow, IDisposable
         public ushort ScanCode, Flags, Reserved, VirtualKey;
         public uint Message, ExtraInformation;
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct DeviceListEntry
+    {
+        public nint Device;
+        public uint Type;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern unsafe uint GetRawInputDeviceList(DeviceListEntry* devices,
+        ref uint count, uint entrySize);
 
     private delegate nint Hook(int code, nint message, nint data);
 

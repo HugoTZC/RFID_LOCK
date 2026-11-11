@@ -28,6 +28,10 @@ Para cambiar la configuración de una instalación existente, desinstale y vuelv
 
 Cierre sesión e iníciela de nuevo para probar. En modo HID, teclee manualmente un identificador autorizado seguido de Enter y confirme que el bloqueo sigue activo. Compruebe que un gafete desconocido conserva el bloqueo, que uno autorizado restaura teclado y mouse, y que tras cinco minutos sin tocar el equipo reaparece la cubierta. Reinicie para comprobar el inicio del servicio y la activación del bloqueo al volver a iniciar sesión.
 
+## Si la lectora se desconecta
+
+La sesión permanece accesible mientras la lectora configurada no esté disponible. Si se desconecta durante el bloqueo, la aplicación retira la cubierta y restaura teclado y mouse. Al detectar nuevamente esa misma lectora, la aplicación vuelve a bloquearse. Esto aplica al arrancar y durante el uso.
+
 ## Recuperación
 
 Este es un bloqueo de aplicación dentro de una sesión iniciada. La pantalla de inicio de sesión y el bloqueo nativo de Windows conservan su autenticación. Si falla la lectora, use Ctrl+Alt+Supr y cierre sesión desde la pantalla de seguridad. Un administrador también puede detener la tarea programada desde otra sesión. Las políticas de bloqueo de Windows siguen aplicándose y los identificadores RFID simples pueden copiarse.

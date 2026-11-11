@@ -119,6 +119,7 @@ internal sealed class LockAgent : ApplicationContext
     private bool discardFrame;
     private bool locked;
     private bool inputBlocked;
+    private bool waitingForReader = true;
 
     public LockAgent(Configuration configuration)
     {
@@ -132,7 +133,7 @@ internal sealed class LockAgent : ApplicationContext
                     if (locked && badges.Contains(badge))
                         Unlock();
                 });
-            Lock();
+            CheckReader();
             timer.Tick += Tick;
             timer.Start();
         }
@@ -149,6 +150,9 @@ internal sealed class LockAgent : ApplicationContext
         ResetFrame();
         // Drain data received while the desktop was unlocked.
         TryReader(discard: true);
+        if (!locked)
+            return;
+
         ShowCovers();
         if (hid is null)
             inputBlocked = Native.BlockInput(true);
@@ -199,8 +203,42 @@ internal sealed class LockAgent : ApplicationContext
         covers.Clear();
     }
 
+    private bool CheckReader()
+    {
+        bool available;
+        if (hid is not null)
+            available = hid.IsConnected();
+        else
+        {
+            if (reader is not null && !SerialPort.GetPortNames().Contains(
+                configuration.Port!, StringComparer.OrdinalIgnoreCase))
+                CloseReader();
+            if (reader is null)
+                TryReader(discard: true);
+            available = reader is not null;
+        }
+
+        if (!available)
+        {
+            if (locked)
+                Unlock();
+            waitingForReader = true;
+            return false;
+        }
+
+        if (waitingForReader)
+        {
+            waitingForReader = false;
+            Lock();
+        }
+        return true;
+    }
+
     private void Tick(object? sender, EventArgs e)
     {
+        if (!CheckReader())
+            return;
+
         if (locked)
         {
             ShowCovers();
@@ -278,6 +316,9 @@ internal sealed class LockAgent : ApplicationContext
             CloseReader();
             ResetFrame();
             retryAt = Environment.TickCount64 + 2000;
+            waitingForReader = true;
+            if (locked)
+                Unlock();
         }
     }
 
