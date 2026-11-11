@@ -4,7 +4,7 @@ El servicio `RfidLock` inicia con Windows y solicita que el sistema y la pantall
 
 ## Instalar
 
-En Windows 10/11, instale el SDK de .NET 10 y abra PowerShell como administrador **con la misma cuenta que usará el equipo**. Para Windows ARM64, agregue `-Runtime win-arm64`. El ejecutable instalado incluye el runtime.
+En Windows 10/11, instale el SDK de .NET 10 y abra PowerShell como administrador **con la misma cuenta que usará el equipo**. Para Windows ARM64, agregue `-Runtime win-arm64`. El ejecutable instalado incluye el runtime. La instalación requiere acceso a `https://api.nuget.org/v3/index.json` para restaurar los paquetes y el runtime.
 
 ### Lectora USB en modo teclado (HID)
 

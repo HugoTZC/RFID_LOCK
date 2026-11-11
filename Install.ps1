@@ -43,7 +43,8 @@ $installedFiles = $false
 $installedService = $false
 $installedTask = $false
 try {
-    & dotnet publish (Join-Path $PSScriptRoot 'RfidLock.csproj') -c Release -r $Runtime --self-contained true -o $staging
+    & dotnet publish (Join-Path $PSScriptRoot 'RfidLock.csproj') -c Release -r $Runtime --self-contained true `
+        --source https://api.nuget.org/v3/index.json -o $staging
     if ($LASTEXITCODE -ne 0) { throw 'Falló dotnet publish.' }
 
     New-Item -ItemType Directory -Path $destination | Out-Null
