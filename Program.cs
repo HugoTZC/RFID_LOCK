@@ -126,7 +126,6 @@ internal sealed class LockAgent : ApplicationContext
     private readonly List<Form> covers = new();
     private readonly StringBuilder frame = new();
     private HidReader? hid;
-    private bool hidCaptureUsed;
     private SerialPort? reader;
     private long retryAt;
     private long lastByteAt;
@@ -163,14 +162,6 @@ internal sealed class LockAgent : ApplicationContext
 
     private void Lock(string reason)
     {
-        if (hid is not null && hidCaptureUsed)
-        {
-            // Renew the native window, Raw Input registration and hooks together.
-            hid.Dispose();
-            hid = null;
-            hid = new HidReader(configuration.HidInstance!, configuration.BadgeLength, HandleHidBadge);
-        }
-
         AgentLog.Write("Bloqueo: " + reason);
         locked = true;
         pendingHidBadge = null;
@@ -188,9 +179,8 @@ internal sealed class LockAgent : ApplicationContext
             inputBlocked = Native.BlockInput(true);
         else
         {
-            hid.SetLocked(true);
-            hidCaptureUsed = true;
-            AgentLog.Write("Captura HID activada.");
+            covers[0].Activate();
+            AgentLog.Write("Captura HID activada en la cubierta.");
         }
     }
 
@@ -201,6 +191,12 @@ internal sealed class LockAgent : ApplicationContext
             return;
 
         CloseCovers();
+        if (hid is not null)
+        {
+            hid.Dispose();
+            hid = null;
+        }
+
         foreach (var rectangle in bounds)
         {
             var cover = new Form
@@ -224,10 +220,23 @@ internal sealed class LockAgent : ApplicationContext
             covers.Add(cover);
             cover.Show();
         }
+
+        if (configuration.HidInstance is { Length: > 0 } instance)
+        {
+            hid = new HidReader(instance, configuration.BadgeLength, HandleHidBadge, covers[0]);
+            hid.SetLocked(true);
+            covers[0].Activate();
+        }
     }
 
     private void CloseCovers()
     {
+        if (covers.Count > 0 && hid is not null)
+        {
+            hid.Dispose();
+            hid = null;
+        }
+
         foreach (var cover in covers)
         {
             var font = cover.Font;
@@ -441,6 +450,8 @@ internal sealed class LockAgent : ApplicationContext
         hid?.SetLocked(false);
         ReleaseInput();
         CloseCovers();
+        if (configuration.HidInstance is { Length: > 0 } instance && hid is null)
+            hid = new HidReader(instance, configuration.BadgeLength, HandleHidBadge);
         unlockedAt = Environment.TickCount64;
         locked = false;
         ShowIdleNotice(IdleMilliseconds);
@@ -469,6 +480,7 @@ internal sealed class LockAgent : ApplicationContext
             timer.Dispose();
             notice?.Dispose();
             hid?.Dispose();
+            hid = null;
             ReleaseInput();
             CloseCovers();
             CloseReader();

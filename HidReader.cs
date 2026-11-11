@@ -19,8 +19,9 @@ internal sealed class HidReader : NativeWindow, IDisposable
     private bool invalid;
     private bool locked;
     private bool firstInputLogged;
+    private readonly bool ownsHandle;
 
-    public HidReader(string? instance, int length, Action<string> scanned)
+    public HidReader(string? instance, int length, Action<string> scanned, Form? captureWindow = null)
     {
         if (instance is not null)
             devicePath = @"\\?\" + instance.Replace('\\', '#') + "#";
@@ -29,7 +30,11 @@ internal sealed class HidReader : NativeWindow, IDisposable
         keyboardHook = FilterKeyboard;
         mouseHook = FilterMouse;
 
-        CreateHandle(new CreateParams { Parent = new IntPtr(-3) });
+        ownsHandle = captureWindow is null;
+        if (captureWindow is null)
+            CreateHandle(new CreateParams { Parent = new IntPtr(-3) });
+        else
+            AssignHandle(captureWindow.Handle);
         try
         {
             var device = new RawDevice { Page = 1, Usage = 6, Flags = 0x100, Target = Handle };
@@ -183,7 +188,10 @@ internal sealed class HidReader : NativeWindow, IDisposable
             UnhookWindowsHookEx(mouse);
         var device = new RawDevice { Page = 1, Usage = 6, Flags = 1 };
         RegisterRawInputDevices(ref device, 1, (uint)Marshal.SizeOf<RawDevice>());
-        DestroyHandle();
+        if (ownsHandle)
+            DestroyHandle();
+        else
+            ReleaseHandle();
     }
 
     [StructLayout(LayoutKind.Sequential)]
