@@ -24,9 +24,21 @@ internal static class Program
 
         try
         {
-            var configuration = JsonSerializer.Deserialize<Configuration>(
-                File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "config.json")));
-            if (configuration is null || (string.IsNullOrWhiteSpace(configuration.HidInstance)
+            string configPath = Path.Combine(AppContext.BaseDirectory, "config.json");
+            ApplicationConfiguration.Initialize();
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
+            var configuration = File.Exists(configPath)
+                ? JsonSerializer.Deserialize<Configuration>(File.ReadAllText(configPath))
+                : null;
+            // Installation and legacy configuration files never arm the session lock.
+            if (configuration is not { ProtectionEnabled: true, ConfigurationVerifiedAt: not null })
+            {
+                using var setup = new InitialSetup(configPath);
+                if (setup.ShowDialog() != DialogResult.OK)
+                    return 0;
+                configuration = setup.SavedConfiguration!;
+            }
+            if ((string.IsNullOrWhiteSpace(configuration.HidInstance)
                     && (string.IsNullOrWhiteSpace(configuration.Port) || configuration.BaudRate <= 0))
                 || (!string.IsNullOrWhiteSpace(configuration.HidInstance)
                     && (configuration.BadgeLength is < 1 or > 128
@@ -37,8 +49,6 @@ internal static class Program
                     || id.Length > 128 || id.Any(c => c < 32 || c > 126)))
                 throw new InvalidDataException("Revise el puerto, la velocidad y los gafetes de config.json.");
 
-            ApplicationConfiguration.Initialize();
-            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
             using var agent = new LockAgent(configuration);
             Application.Run(agent);
             return 0;
@@ -52,7 +62,8 @@ internal static class Program
 }
 
 internal sealed record Configuration(string? Port, int BaudRate, string[] Badges,
-    string? HidInstance, int BadgeLength, Dictionary<string, string>? BadgeNames);
+    string? HidInstance, int BadgeLength, Dictionary<string, string>? BadgeNames,
+    bool ProtectionEnabled = false, DateTimeOffset? ConfigurationVerifiedAt = null, string? MachineName = null);
 
 internal sealed class AwakeService : ServiceBase
 {
