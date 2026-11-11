@@ -18,7 +18,7 @@ La configuración inicial admite lectoras USB HID que envían dígitos o letras 
 
 ## PostgreSQL y diagnóstico
 
-La configuración inicial incluye una cadena de conexión opcional y el botón **Probar conexión PostgreSQL**. Las credenciales se guardan cifradas para la cuenta de Windows que ejecuta la tarea. El bloqueo y la validación de gafetes usan el perfil local. La [migración](migrations/001_rfid_lock.sql) crea el esquema central y las [instrucciones](migrations/README.md) indican cómo aplicarla. La carga de CSV está pendiente.
+La configuración inicial pide servidor (IP o nombre), puerto, usuario y contraseña. **Probar conexión** lista las bases accesibles y sugiere `rfid_lock` si está disponible. **Continuar** verifica la base elegida antes de abrir la configuración de la lectora y los gafetes. Las credenciales se guardan cifradas para la cuenta de Windows que ejecuta la tarea. El bloqueo y la validación de gafetes usan el perfil local. La [migración](migrations/001_rfid_lock.sql) crea el esquema central y las [instrucciones](migrations/README.md) indican cómo aplicarla. La carga de CSV está pendiente.
 
 Si un gafete desbloquea y el equipo vuelve a bloquearse de inmediato, consulte `%LOCALAPPDATA%\RfidLock\diagnostico.log`. El registro indica el motivo del bloqueo y si llegó una lectura HID válida, rechazada o no autorizada. Omite los códigos de gafete.
 
