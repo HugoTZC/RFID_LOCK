@@ -8,16 +8,26 @@ internal sealed class IdleNotice : Form
         Padding = new Padding(8)
     };
 
-    public IdleNotice()
+    public IdleNotice(Action lockScreen)
     {
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.Manual;
         ShowInTaskbar = false;
         TopMost = true;
-        ClientSize = new Size(300, 68);
+        ClientSize = new Size(300, 100);
         BackColor = Color.FromArgb(28, 31, 38);
         ForeColor = Color.White;
+        var button = new Button
+        {
+            Text = "Bloquear",
+            Dock = DockStyle.Bottom,
+            Height = 32,
+            BackColor = Color.White,
+            ForeColor = Color.Black
+        };
+        button.Click += (_, _) => lockScreen();
         Controls.Add(message);
+        Controls.Add(button);
     }
 
     protected override bool ShowWithoutActivation => true;

@@ -276,13 +276,21 @@ internal sealed class LockAgent : ApplicationContext
         uint idle = Math.Min(unchecked(now - unlockedAt), unchecked(now - input.Time));
         if (idle >= IdleMilliseconds)
             Lock();
-        else if (idle >= 10_000 && currentUser is not null)
-        {
-            notice ??= new IdleNotice();
-            notice.UpdateCountdown(currentUser, IdleMilliseconds - idle);
-        }
         else
-            notice?.Hide();
+            ShowIdleNotice(IdleMilliseconds - idle);
+    }
+
+    private void ShowIdleNotice(uint remainingMilliseconds)
+    {
+        if (currentUser is null)
+            return;
+
+        notice ??= new IdleNotice(() =>
+        {
+            if (!locked && CheckReader() && !locked)
+                Lock();
+        });
+        notice.UpdateCountdown(currentUser, remainingMilliseconds);
     }
 
     private void TryReader(bool discard)
@@ -396,6 +404,7 @@ internal sealed class LockAgent : ApplicationContext
         CloseCovers();
         unlockedAt = unchecked((uint)Environment.TickCount);
         locked = false;
+        ShowIdleNotice(IdleMilliseconds);
     }
 
     private void CloseReader()
