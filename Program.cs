@@ -129,7 +129,8 @@ internal sealed class LockAgent : ApplicationContext
     private SerialPort? reader;
     private long retryAt;
     private long lastByteAt;
-    private uint unlockedAt;
+    private long unlockedAt;
+    private string? pendingHidBadge;
     private bool discardFrame;
     private bool locked;
     private bool inputBlocked;
@@ -163,6 +164,7 @@ internal sealed class LockAgent : ApplicationContext
     {
         AgentLog.Write("Bloqueo: " + reason);
         locked = true;
+        pendingHidBadge = null;
         currentBadge = null;
         currentUser = null;
         notice?.Hide();
@@ -242,6 +244,8 @@ internal sealed class LockAgent : ApplicationContext
             // Ignore brief Raw Input enumeration failures while a reader was available.
             if (hid is not null && !waitingForReader && ++missingReaderChecks < 5)
                 return true;
+            if (!waitingForReader)
+                AgentLog.Write("Lectora no disponible.");
             if (locked)
                 Unlock();
             waitingForReader = true;
@@ -252,13 +256,22 @@ internal sealed class LockAgent : ApplicationContext
         if (waitingForReader)
         {
             waitingForReader = false;
-            Lock("lectora disponible");
+            if (currentBadge is null)
+                Lock("lectora disponible");
         }
         return true;
     }
 
     private void Tick(object? sender, EventArgs e)
     {
+        // Apply the scan after WM_INPUT has finished, before probing the reader.
+        if (pendingHidBadge is { } badge)
+        {
+            pendingHidBadge = null;
+            if (HandleBadge(badge))
+                return;
+        }
+
         if (!CheckReader())
             return;
 
@@ -280,11 +293,11 @@ internal sealed class LockAgent : ApplicationContext
             return;
 
         uint now = unchecked((uint)Environment.TickCount);
-        uint idle = Math.Min(unchecked(now - unlockedAt), unchecked(now - input.Time));
+        long idle = Math.Min(Environment.TickCount64 - unlockedAt, unchecked(now - input.Time));
         if (idle >= IdleMilliseconds)
             Lock("inactividad");
         else
-            ShowIdleNotice(IdleMilliseconds - idle);
+            ShowIdleNotice(IdleMilliseconds - (uint)idle);
     }
 
     private void ShowIdleNotice(uint remainingMilliseconds)
@@ -377,7 +390,8 @@ internal sealed class LockAgent : ApplicationContext
     private void HandleHidBadge(string badge)
     {
         AgentLog.Write(badges.Contains(badge) ? "Gafete HID autorizado recibido." : "Gafete HID no autorizado.");
-        HandleBadge(badge);
+        if (locked && badges.Contains(badge))
+            pendingHidBadge = badge;
     }
 
     private bool HandleBadge(string badge)
@@ -414,7 +428,7 @@ internal sealed class LockAgent : ApplicationContext
         hid?.SetLocked(false);
         ReleaseInput();
         CloseCovers();
-        unlockedAt = unchecked((uint)Environment.TickCount);
+        unlockedAt = Environment.TickCount64;
         locked = false;
         ShowIdleNotice(IdleMilliseconds);
     }
