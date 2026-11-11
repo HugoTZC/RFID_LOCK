@@ -24,7 +24,8 @@ internal static class Program
 
         try
         {
-            string configPath = Path.Combine(AppContext.BaseDirectory, "config.json");
+            string configPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "RfidLock", "config.json");
             ApplicationConfiguration.Initialize();
             Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
             var configuration = File.Exists(configPath)

@@ -6,6 +6,7 @@ internal sealed class InitialSetup : Form
     private readonly TextBox instance = new();
     private readonly NumericUpDown length = new() { Minimum = 1, Maximum = 128, Value = 10 };
     private readonly TextBox user = new();
+    private readonly TextBox scan = new() { ReadOnly = true };
     private readonly Label status = new() { AutoSize = true, MaximumSize = new Size(520, 0) };
     private readonly Button test = new() { Text = "Probar gafete", AutoSize = true };
     private readonly Button save = new() { Text = "Guardar y activar", AutoSize = true, Enabled = false };
@@ -27,6 +28,7 @@ internal sealed class InitialSetup : Form
         AddField("Ruta de instancia HID (Administrador de dispositivos)", instance);
         AddField("Caracteres antes de Enter", length);
         AddField("Nombre del usuario del gafete", user);
+        AddField("Código leído por la lectora", scan);
         fields.Controls.Add(test);
         fields.Controls.Add(status);
         fields.Controls.Add(save);
@@ -50,6 +52,7 @@ internal sealed class InitialSetup : Form
             string temporaryPath = configPath + ".tmp";
             try
             {
+                Directory.CreateDirectory(Path.GetDirectoryName(configPath)!);
                 File.WriteAllText(temporaryPath, JsonSerializer.Serialize(configuration));
                 File.Move(temporaryPath, configPath, overwrite: true);
                 SavedConfiguration = configuration;
@@ -72,6 +75,7 @@ internal sealed class InitialSetup : Form
     private void ClearTests()
     {
         badges.Clear();
+        scan.Clear();
         save.Enabled = false;
     }
 
@@ -93,6 +97,7 @@ internal sealed class InitialSetup : Form
                 {
                     if (reader is null)
                         return;
+                    scan.Text = code;
                     badges[code] = name;
                     FinishTest($"Lectura válida para {name}. Gafetes verificados: {badges.Count}.");
                 });
@@ -103,7 +108,10 @@ internal sealed class InitialSetup : Form
                 return;
             }
 
+            scan.Clear();
+            scan.Focus();
             test.Enabled = false;
+            machine.Enabled = false;
             save.Enabled = false;
             instance.Enabled = false;
             length.Enabled = false;
@@ -124,6 +132,7 @@ internal sealed class InitialSetup : Form
         reader?.Dispose();
         reader = null;
         test.Enabled = true;
+        machine.Enabled = true;
         save.Enabled = badges.Count != 0;
         instance.Enabled = true;
         length.Enabled = true;
