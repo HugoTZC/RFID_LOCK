@@ -20,6 +20,7 @@ internal sealed class IdleNotice : Form
         var button = new Button
         {
             Text = "Bloquear",
+            TabStop = false,
             Dock = DockStyle.Bottom,
             Height = 32,
             BackColor = Color.White,
@@ -31,6 +32,9 @@ internal sealed class IdleNotice : Form
     }
 
     protected override bool ShowWithoutActivation => true;
+
+    protected override bool ProcessDialogKey(Keys keyData) =>
+        (keyData & Keys.KeyCode) == Keys.Enter || base.ProcessDialogKey(keyData);
 
     protected override CreateParams CreateParams
     {

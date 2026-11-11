@@ -125,7 +125,8 @@ internal sealed class LockAgent : ApplicationContext
     private readonly System.Windows.Forms.Timer timer = new() { Interval = 200 };
     private readonly List<Form> covers = new();
     private readonly StringBuilder frame = new();
-    private readonly HidReader? hid;
+    private HidReader? hid;
+    private bool hidCaptureUsed;
     private SerialPort? reader;
     private long retryAt;
     private long lastByteAt;
@@ -162,6 +163,14 @@ internal sealed class LockAgent : ApplicationContext
 
     private void Lock(string reason)
     {
+        if (hid is not null && hidCaptureUsed)
+        {
+            // Renew the native window, Raw Input registration and hooks together.
+            hid.Dispose();
+            hid = null;
+            hid = new HidReader(configuration.HidInstance!, configuration.BadgeLength, HandleHidBadge);
+        }
+
         AgentLog.Write("Bloqueo: " + reason);
         locked = true;
         pendingHidBadge = null;
@@ -178,7 +187,11 @@ internal sealed class LockAgent : ApplicationContext
         if (hid is null)
             inputBlocked = Native.BlockInput(true);
         else
+        {
             hid.SetLocked(true);
+            hidCaptureUsed = true;
+            AgentLog.Write("Captura HID activada.");
+        }
     }
 
     private void ShowCovers()

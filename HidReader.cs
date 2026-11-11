@@ -18,6 +18,7 @@ internal sealed class HidReader : NativeWindow, IDisposable
     private long lastKey;
     private bool invalid;
     private bool locked;
+    private bool firstInputLogged;
 
     public HidReader(string? instance, int length, Action<string> scanned)
     {
@@ -51,6 +52,7 @@ internal sealed class HidReader : NativeWindow, IDisposable
     public void SetLocked(bool value)
     {
         locked = value;
+        firstInputLogged = false;
         Reset();
     }
 
@@ -85,6 +87,12 @@ internal sealed class HidReader : NativeWindow, IDisposable
 
         if (devicePath is not null && !MatchesDevice(key.Header.Device))
             return;
+
+        if (devicePath is not null && !firstInputLogged)
+        {
+            firstInputLogged = true;
+            AgentLog.Write("Primera tecla recibida de la lectora HID configurada.");
+        }
 
         long now = Environment.TickCount64;
         if (frameDevice != key.Header.Device || now - lastKey > 1500)
