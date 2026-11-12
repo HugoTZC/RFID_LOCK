@@ -121,6 +121,7 @@ internal sealed class LockAgent : ApplicationContext
 {
     private const uint IdleMilliseconds = 300_000;
     private readonly Configuration configuration;
+    private readonly DatabaseAudit audit;
     private readonly HashSet<string> badges;
     private readonly System.Windows.Forms.Timer timer = new() { Interval = 200 };
     private readonly List<Form> covers = new();
@@ -144,6 +145,8 @@ internal sealed class LockAgent : ApplicationContext
     {
         this.configuration = configuration;
         badges = new HashSet<string>(configuration.Badges, StringComparer.Ordinal);
+        audit = new DatabaseAudit(configuration);
+        Native.SetThreadExecutionState(0x80000003);
         try
         {
             if (!string.IsNullOrWhiteSpace(configuration.HidInstance))
@@ -163,6 +166,7 @@ internal sealed class LockAgent : ApplicationContext
     private void Lock(string reason)
     {
         AgentLog.Write("Bloqueo: " + reason);
+        audit.Record("screen_locked", reason: reason);
         locked = true;
         pendingHidBadge = null;
         currentBadge = null;
@@ -375,6 +379,9 @@ internal sealed class LockAgent : ApplicationContext
                     string badge = frame.ToString();
                     bool valid = !discardFrame;
                     ResetFrame();
+                    if (valid && badge.Length > 0 && locked)
+                        audit.Record(badges.Contains(badge) ? "scan_allowed" : "scan_denied", badge,
+                            badges.Contains(badge) ? null : "gafete no autorizado");
                     if (valid && HandleBadge(badge))
                         return;
                 }
@@ -411,7 +418,10 @@ internal sealed class LockAgent : ApplicationContext
 
     private void HandleHidBadge(string badge)
     {
-        AgentLog.Write(badges.Contains(badge) ? "Gafete HID autorizado recibido." : "Gafete HID no autorizado.");
+        bool authorized = badges.Contains(badge);
+        AgentLog.Write(authorized ? "Gafete HID autorizado recibido." : "Gafete HID no autorizado.");
+        audit.Record(authorized ? "scan_allowed" : "scan_denied", badge,
+            authorized ? null : "gafete no autorizado");
         if (locked && badges.Contains(badge))
             pendingHidBadge = badge;
     }
@@ -478,6 +488,8 @@ internal sealed class LockAgent : ApplicationContext
         if (disposing)
         {
             timer.Dispose();
+            audit.Dispose();
+            Native.SetThreadExecutionState(0x80000000);
             notice?.Dispose();
             hid?.Dispose();
             hid = null;

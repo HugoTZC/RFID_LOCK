@@ -4,6 +4,7 @@ Ejecutar en la base de datos de destino con una cuenta de migración.
 
 ```sh
 psql -X -v ON_ERROR_STOP=1 -d rfid_lock -f migrations/001_rfid_lock.sql
+psql -X -v ON_ERROR_STOP=1 -d rfid_lock -f migrations/002_optional_employee_number.sql
 ```
 
 - Cada máquina tiene un UUID persistente generado durante el alta, un nombre, una zona horaria IANA y una hora local de carga. El instalador arranca con protección desactivada. La aplicación debe confirmar la conexión, registrar la lectora y comprobar un escaneo antes de habilitarla. La configuración de emergencia debe funcionar localmente aunque la base central esté caída.
