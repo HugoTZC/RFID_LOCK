@@ -235,11 +235,21 @@ internal sealed class InitialSetup : Form
             reader = new HidReader(selectedReader, (int)length.Value, code =>
             {
                 // Finish after Raw Input returns so its window can complete message cleanup.
-                BeginInvoke(() =>
+                BeginInvoke(async () =>
                 {
                     if (reader is null)
                         return;
-                    instance.Text = selectedReader ?? reader.DetectedInstance!;
+                    string? detected = selectedReader ?? reader.DetectedInstance;
+                    FinishTest("Verificando gafete...");
+                    if (detected is null)
+                        return;
+
+                    if (badges.Count == 0 && !await VerifyAdministratorAsync(code))
+                        return;
+
+                    if (IsDisposed)
+                        return;
+                    instance.Text = detected;
                     scan.Text = code;
                     badges[code] = name;
                     FinishTest($"Lectura válida para {name}. Gafetes verificados: {badges.Count}.");
@@ -259,13 +269,47 @@ internal sealed class InitialSetup : Form
             resetReader.Enabled = false;
             length.Enabled = false;
             user.Enabled = false;
-            status.Text = "Escanee el gafete ahora. Teclado y mouse se liberarán en un máximo de ocho segundos.";
+            status.Text = badges.Count == 0
+                ? "Escanee un gafete de administrador. La captura dura hasta ocho segundos."
+                : "Escanee el gafete ahora. La captura dura hasta ocho segundos.";
             timeout.Start();
             reader.SetLocked(true);
         }
         catch (System.ComponentModel.Win32Exception ex)
         {
             FinishTest("Windows no pudo iniciar la captura HID. " + ex.Message);
+        }
+    }
+
+    private async Task<bool> VerifyAdministratorAsync(string code)
+    {
+        readerFields.Enabled = false;
+        try
+        {
+            await using var connection = new NpgsqlConnection(verifiedConnection!);
+            await connection.OpenAsync();
+            await using var command = new NpgsqlCommand("""
+                SELECT EXISTS (
+                    SELECT 1 FROM rfid_lock.badges
+                    WHERE code = $1 AND enabled AND role IN ('admin', 'superUsuario')
+                )
+                """, connection);
+            command.Parameters.AddWithValue("code", code);
+            bool authorized = await command.ExecuteScalarAsync() is true;
+            if (!authorized && !IsDisposed)
+                status.Text = "El primer gafete debe pertenecer a un administrador activo.";
+            return authorized;
+        }
+        catch (Exception ex) when (ex is NpgsqlException or TimeoutException or InvalidOperationException)
+        {
+            if (!IsDisposed)
+                status.Text = "No se pudo validar el administrador. Revise la migración y el acceso a PostgreSQL.";
+            return false;
+        }
+        finally
+        {
+            if (!IsDisposed)
+                readerFields.Enabled = true;
         }
     }
 
